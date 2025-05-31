@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState } from 'react'; // <--- TAMBAHKAN 'React,' di sini
-import { ethers } from 'ethers'; 
+import { BrowserProvider, ethers } from 'ethers'; // <--- TAMBAHKAN BrowserProvider 
 
 export default function SwapPage() {
   const [fromToken, setFromToken] = useState('');
@@ -24,7 +24,7 @@ export default function SwapPage() {
 
       // Gunakan type assertion untuk memberitahu TypeScript bahwa window.ethereum adalah provider
       // (Ini untuk kepatuhan TypeScript, pada runtime Anda tetap harus yakin itu ada)
-      const provider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider); // <--- TAMBAHKAN 'as ethers.Eip1193Provider'
+      const provider = new BrowserProvider(window.ethereum as ethers.Eip1193Provider); // <--- HILANGKAN 'ethers.'
       const signer = await provider.getSigner();
       console.log("Wallet connected:", await signer.getAddress());
 

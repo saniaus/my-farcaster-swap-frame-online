@@ -96,7 +96,7 @@ app.frame('/', (c) => {
   }
 
   return c.res({
-    image: (
+    image: "https://via.placeholder.com/600x400.png?text=Farcaster+Swap+Frame",
       <div style={{
         display: 'flex',
         flexDirection: 'column',
@@ -133,7 +133,7 @@ app.frame('/preview', async (c) => {
 
   if (!inputAmount) {
     return c.res({
-      image: (
+      image: "https://via.placeholder.com/600x400.png?text=Swap+Preview",
         <div style={{ display: 'flex', fontSize: 60, alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%', backgroundColor: 'red', color: 'white' }}>
           Please enter an amount first!
         </div>

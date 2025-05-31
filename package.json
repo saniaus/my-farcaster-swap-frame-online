@@ -9,7 +9,7 @@
     "lint": "next lint"
   },
   "engines": {
-    "node": "20.x"  
+    "node": "18.x"  
   },
   "dependencies": {
     "@uniswap/sdk-core": "4.2.0",      

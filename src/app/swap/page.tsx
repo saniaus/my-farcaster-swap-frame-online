@@ -1,8 +1,8 @@
 // src/app/swap/page.tsx
 'use client';
 
-import { useState } from 'react';
-import { ethers } from 'ethers'; // Library ethers untuk interaksi blockchain
+import React, { useState } from 'react'; // <--- TAMBAHKAN 'React,' di sini
+import { ethers } from 'ethers'; 
 
 export default function SwapPage() {
   const [fromToken, setFromToken] = useState('');
@@ -16,37 +16,19 @@ export default function SwapPage() {
 
       // --- PENTING: TAMBAHKAN LOGIKA SWAP UNISWAP DI SINI ---
       // Ini adalah bagian kunci yang harus Anda implementasikan.
-      // Anda perlu:
-      // 1. Dapatkan Uniswap Router Address untuk jaringan yang relevan.
-      // 2. Dapatkan ABI Uniswap Router.
-      // 3. Buat instance kontrak Uniswap Router.
-      // 4. Lakukan perhitungan harga dan rute swap.
-      // 5. Panggil fungsi swap (misalnya, swapExactTokensForTokens) di kontrak Uniswap Router.
 
-      // Contoh Dummy (ini tidak melakukan swap nyata):
-      const provider = new ethers.BrowserProvider(window.ethereum);
+      // Pastikan window.ethereum tersedia (misalnya, MetaMask terinstal)
+      if (typeof window.ethereum === 'undefined') {
+        throw new Error("MetaMask or other Ethereum wallet not detected. Please install one.");
+      }
+
+      // Gunakan type assertion untuk memberitahu TypeScript bahwa window.ethereum adalah provider
+      // (Ini untuk kepatuhan TypeScript, pada runtime Anda tetap harus yakin itu ada)
+      const provider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider); // <--- TAMBAHKAN 'as ethers.Eip1193Provider'
       const signer = await provider.getSigner();
       console.log("Wallet connected:", await signer.getAddress());
 
-      // >>> LOGIKA UNISWAP NYATA AKAN DIMULAI DI SINI <<<
-      // Misalnya:
-      // const uniswapRouterAddress = "0x..."; // Alamat router Uniswap di jaringan yang dipilih
-      // const uniswapRouterAbi = [...]; // ABI router
-      // const uniswapRouter = new ethers.Contract(uniswapRouterAddress, uniswapRouterAbi, signer);
-      // const amountInWei = ethers.parseUnits(amount, 18); // Sesuaikan desimal token
-      // const path = [fromToken, toToken]; // Contoh path swap
-      // const deadline = Math.floor(Date.now() / 1000) + 60 * 20; // 20 menit dari sekarang
-      // const tx = await uniswapRouter.swapExactTokensForTokens(
-      //   amountInWei,
-      //   0, // amountOutMin (gunakan slippage tolerance yang tepat)
-      //   path,
-      //   await signer.getAddress(),
-      //   deadline
-      // );
-      // await tx.wait(); // Tunggu transaksi selesai
-
       setStatus('Swap berhasil disimulasikan. Lanjutkan dengan implementasi Uniswap.');
-      // setStatus('Swap berhasil! Tx Hash: ' + tx.hash); // Jika swap nyata berhasil
     } catch (err) {
       setStatus('Error: ' + (err as Error).message);
       console.error("Swap Error:", err);
@@ -72,7 +54,7 @@ export default function SwapPage() {
         style={{ width: '100%', padding: '8px', marginBottom: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
       />
       <input
-        type="number" // Pastikan input number
+        type="number" 
         className="block border p-2 mb-2 w-full"
         value={amount}
         onChange={e => setAmount(e.target.value)}

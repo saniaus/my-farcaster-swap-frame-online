@@ -1,8 +1,8 @@
 import { Button, Frog } from 'frog';
 import { devtools } from 'frog/dev';
 import { serveStatic } from 'frog/serve-static';
-import { Address, Hex } from 'viem'; // Updated import for Hex
-import { parseEther, formatEther, parseUnits, formatUnits } from 'viem/utils'; // Updated import for viem utilities
+import { Address, Hex } from 'viem'; 
+import { parseEther, formatEther, parseUnits, formatUnits } from 'viem/utils'; 
 import { createPublicClient, http, PublicClient } from 'viem';
 import { base } from 'viem/chains';
 
@@ -96,26 +96,7 @@ app.frame('/', (c) => {
   }
 
   return c.res({
-    image: "https://via.placeholder.com/600x400.png?text=Farcaster+Swap+Frame",
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: '100%',
-        height: '100%',
-        backgroundColor: '#1a1a1a',
-        color: 'white',
-        fontSize: 48,
-        padding: 20
-      }}>
-        <p>Swap {WETH.symbol} for {USDC.symbol} on Base</p>
-        <p>Enter amount of {WETH.symbol} to swap:</p>
-        {c.initialState.inputAmount && (
-          <p style={{ fontSize: 36, color: '#00ff00' }}>Amount: {c.initialState.inputAmount}</p>
-        )}
-      </div>
-    ),
+    image: "https://via.placeholder.com/600x400.png?text=Farcaster+Swap+Frame", // URL gambar statis untuk Frame pertama
     intents: [
       <Button value="preview">Preview Swap</Button>,
       <Button.Reset>Reset</Button.Reset>,
@@ -133,11 +114,7 @@ app.frame('/preview', async (c) => {
 
   if (!inputAmount) {
     return c.res({
-      image: "https://via.placeholder.com/600x400.png?text=Swap+Preview",
-        <div style={{ display: 'flex', fontSize: 60, alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%', backgroundColor: 'red', color: 'white' }}>
-          Please enter an amount first!
-        </div>
-      ),
+      image: "https://via.placeholder.com/600x400.png?text=Error:+Enter+Amount", // URL gambar statis untuk error
       intents: [
         <Button action="/">Back</Button>
       ]
@@ -241,11 +218,7 @@ app.frame('/preview', async (c) => {
   } catch (error: any) {
     console.error('Error during swap estimation:', error);
     return c.res({
-      image: (
-        <div style={{ display: 'flex', fontSize: 40, alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%', backgroundColor: 'red', color: 'white', padding: 20, textAlign: 'center' }}>
-          Error: {error.message || 'Failed to estimate swap. Check amount or liquidity.'}
-        </div>
-      ),
+      image: "https://via.placeholder.com/600x400.png?text=Error:+Swap+Failed", // URL gambar statis untuk error
       intents: [
         <Button action="/">Back</Button>
       ]
@@ -253,26 +226,7 @@ app.frame('/preview', async (c) => {
   }
 
   return c.res({
-    image: (
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: '100%',
-        height: '100%',
-        backgroundColor: '#1a1a1a',
-        color: 'white',
-        fontSize: 48,
-        padding: 20
-      }}>
-        <p>Swap Summary:</p>
-        <p>Input: {inputAmount} {WETH.symbol}</p>
-        <p>Output: ≈ {estimatedOutput} {USDC.symbol}</p>
-        <p>Est. Gas: {gasEstimate} ETH</p>
-        <p style={{ fontSize: 24, color: '#aaa' }}>Slippage Tolerance: 0.5%</p>
-      </div>
-    ),
+    image: "https://via.placeholder.com/600x400.png?text=Swap+Summary", // URL gambar statis untuk summary
     intents: [
       <Button.Transaction target="/tx">Confirm Swap</Button.Transaction>,
       <Button action="/">Back</Button>,

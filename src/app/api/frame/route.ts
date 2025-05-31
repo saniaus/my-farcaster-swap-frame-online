@@ -7,10 +7,9 @@ import { base } from 'viem/chains';
 
 // Uniswap SDK Imports
 import { CurrencyAmount, Token, TradeType, Percent } from '@uniswap/sdk-core';
-import { Pool, Route as V3Route, computePoolAddress, FeeAmount } from '@uniswap/v3-sdk'; // Import yang dibutuhkan untuk V3 manual
+import { Pool, Route as V3Route, computePoolAddress, FeeAmount } from '@uniswap/v3-sdk'; 
 
 // ABI Uniswap V3 Router
-// Ini adalah ABI parsial, hanya fungsi `exactInputSingle` yang kita butuhkan
 const V3_ROUTER_ABI = [
   {
     inputs: [
@@ -49,7 +48,7 @@ const V3_ROUTER_ABI = [
     stateMutability: "nonpayable",
     type: "function",
   }
-] as const; // 'as const' penting untuk Viem ABI
+] as const;
 
 // --- Konfigurasi Klien Viem ---
 const publicClient: PublicClient = createPublicClient({
@@ -146,12 +145,12 @@ app.frame('/preview', async (c) => {
 
   let estimatedOutput = '0';
   let gasEstimate = 'N/A';
-  let calldata: Hex = '0x'; // Type Hex dari Viem
+  let calldata: Hex = '0x'; 
   let toAddress = UNISWAP_V3_ROUTER_ADDRESS;
-  let value: Hex = '0x0'; // Default value BigInt(0) ke Hex '0x0'
+  let value: Hex = '0x0'; 
 
   try {
-    const amountInBigInt = parseUnits(inputAmount, WETH.decimals); // Konversi input string ke BigInt
+    const amountInBigInt = parseUnits(inputAmount, WETH.decimals); 
 
     const tokenInObj = WETH;
     const tokenOutObj = USDC;
@@ -162,7 +161,6 @@ app.frame('/preview', async (c) => {
     }
 
     // --- Logika Estimasi Swap Manual (Menggunakan Quoter V3) ---
-    // Kita akan mencari estimasi output dengan mencoba fee tiers yang berbeda
     let bestOutput = BigInt(0);
     let bestFee: FeeAmount | undefined;
 
@@ -170,14 +168,14 @@ app.frame('/preview', async (c) => {
         try {
             const quoteResult = await publicClient.readContract({
                 address: UNISWAP_V3_QUOTER_ADDRESS,
-                abi: V3_ROUTER_ABI, // Menggunakan ABI Quoter
+                abi: V3_ROUTER_ABI, 
                 functionName: 'quoteExactInputSingle',
                 args: [
                     tokenInObj.address,
                     tokenOutObj.address,
                     fee,
                     amountInBigInt,
-                    BigInt(0) // sqrtPriceLimitX96 (0 berarti tidak ada limit)
+                    BigInt(0) 
                 ],
             });
             if (quoteResult && (quoteResult as bigint) > bestOutput) {
@@ -193,34 +191,29 @@ app.frame('/preview', async (c) => {
         throw new Error('No valid quote found for swap.');
     }
 
-    estimatedOutput = formatEther(bestOutput.toString()); // Format output ke format manusiawi (untuk WETH/USDC, sesuaikan desimal)
-    // Jika tokenOutObj.decimals bukan 18 (misal USDC 6 desimal), gunakan parseUnits atau formatUnits dengan desimal yang sesuai
     estimatedOutput = formatUnits(bestOutput, tokenOutObj.decimals);
 
 
     // --- Buat Calldata untuk Transaksi Swap ---
-    // Ini adalah parameter untuk fungsi exactInputSingle di SwapRouter
     const params = {
       tokenIn: tokenInObj.address as Address,
       tokenOut: tokenOutObj.address as Address,
       fee: bestFee,
-      recipient: senderAddress, // Alamat penerima
-      deadline: BigInt(Math.floor(Date.now() / 1000) + 60 * 10), // Deadline 10 menit
+      recipient: senderAddress, 
+      deadline: BigInt(Math.floor(Date.now() / 1000) + 60 * 10), 
       amountIn: amountInBigInt,
-      amountOutMinimum: bestOutput * BigInt(9950) / BigInt(10000), // Minimum 0.5% slippage
-      sqrtPriceLimitX96: BigInt(0), // Tidak ada price limit
+      amountOutMinimum: bestOutput * BigInt(9950) / BigInt(10000), 
+      sqrtPriceLimitX96: BigInt(0), 
     };
 
-    // Encode call data menggunakan Viem
     calldata = await publicClient.encodeFunctionData({
         abi: V3_ROUTER_ABI,
         functionName: 'exactInputSingle',
-        args: [params as any], // Memastikan tipe args sesuai
+        args: [params as any], 
     });
 
-    // Jika swap dari ETH (native token), value perlu diatur
-    if (tokenInObj.isNative) { // Misalnya WETH dianggap native jika kita mengirim ETH
-        value = amountInBigInt.toString() as Hex; // value adalah jumlah native token yang dikirim
+    if (tokenInObj.isNative) { 
+        value = amountInBigInt.toString() as Hex; 
     }
 
 
@@ -242,7 +235,7 @@ app.frame('/preview', async (c) => {
     c.initialState.estimatedOutput = estimatedOutput;
     c.initialState.calldata = calldata;
     c.initialState.toAddress = toAddress;
-    c.initialState.value = value; // Pastikan ini adalah Hex string
+    c.initialState.value = value; 
 
   } catch (error: any) {
     console.error('Error during swap estimation:', error);
@@ -299,8 +292,8 @@ app.transaction('/tx', (c) => {
   return c.send({
     chainId: `eip155:${base.id}`,
     to: toAddress as Address,
-    data: calldata as Hex, // Pastikan calldata bertipe Hex
-    value: BigInt(value as string), // Pastikan value diubah kembali ke BigInt jika disimpan sebagai string hex
+    data: calldata as Hex, 
+    value: BigInt(value as string), 
   });
 });
 

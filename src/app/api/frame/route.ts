@@ -1,8 +1,8 @@
 import { Button, Frog } from 'frog';
 import { devtools } from 'frog/dev';
 import { serveStatic } from 'frog/serve-static';
-import { Address, Hex } from 'viem'; // Tetap impor tipe dasar dan Hex dari 'viem'
-import { parseEther, formatEther, parseUnits, formatUnits } from 'viem/utils'; // Impor utilitas dari 'viem/utils'
+import { Address, Hex } from 'viem'; // Updated import for Hex
+import { parseEther, formatEther, parseUnits, formatUnits } from 'viem/utils'; // Updated import for viem utilities
 import { createPublicClient, http, PublicClient } from 'viem';
 import { base } from 'viem/chains';
 

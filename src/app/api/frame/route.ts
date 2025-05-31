@@ -1,30 +1,71 @@
 import { Button, Frog } from 'frog';
 import { devtools } from 'frog/dev';
 import { serveStatic } from 'frog/serve-static';
-import { Address, parseEther, formatEther, parseUnits } from 'viem';
-import { createPublicClient, http } from 'viem';
+import { Address, parseEther, formatEther, parseUnits, Hex } from 'viem';
+import { createPublicClient, http, PublicClient } from 'viem';
 import { base } from 'viem/chains';
 
 // Uniswap SDK Imports
 import { CurrencyAmount, Token, TradeType, Percent } from '@uniswap/sdk-core';
-import { AlphaRouter, SwapOptions, SwapType } from '@uniswap/smart-order-router';
+import { Pool, Route as V3Route, computePoolAddress, FeeAmount } from '@uniswap/v3-sdk'; // Import yang dibutuhkan untuk V3 manual
+
+// ABI Uniswap V3 Router
+// Ini adalah ABI parsial, hanya fungsi `exactInputSingle` yang kita butuhkan
+const V3_ROUTER_ABI = [
+  {
+    inputs: [
+      {
+        components: [
+          { internalType: "address", name: "tokenIn", type: "address" },
+          { internalType: "address", name: "tokenOut", type: "address" },
+          { internalType: "uint24", name: "fee", type: "uint24" },
+          { internalType: "address", name: "recipient", type: "address" },
+          { internalType: "uint256", name: "deadline", type: "uint256" },
+          { internalType: "uint256", name: "amountIn", type: "uint256" },
+          { internalType: "uint256", name: "amountOutMinimum", type: "uint256" },
+          { internalType: "uint160", name: "sqrtPriceLimitX96", type: "uint160" },
+        ],
+        internalType: "struct ISwapRouter.ExactInputSingleParams",
+        name: "params",
+        type: "tuple",
+      },
+    ],
+    name: "exactInputSingle",
+    outputs: [{ internalType: "uint256", name: "amountOut", type: "uint256" }],
+    stateMutability: "payable",
+    type: "function",
+  },
+  // ABI untuk Quoter V3 (untuk mendapatkan harga secara on-chain)
+  {
+    inputs: [
+        { internalType: "address", name: "tokenIn", type: "address" },
+        { internalType: "address", name: "tokenOut", type: "address" },
+        { internalType: "uint24", name: "fee", type: "uint24" },
+        { internalType: "uint256", name: "amountIn", type: "uint256" },
+        { internalType: "uint160", name: "sqrtPriceLimitX96", type: "uint160" },
+    ],
+    name: "quoteExactInputSingle",
+    outputs: [{ internalType: "uint256", name: "amountOut", type: "uint256" }],
+    stateMutability: "nonpayable",
+    type: "function",
+  }
+] as const; // 'as const' penting untuk Viem ABI
 
 // --- Konfigurasi Klien Viem ---
-// Ini untuk berinteraksi dengan blockchain Base
-// URL RPC akan diambil dari Environment Variable di Vercel
-const publicClient = createPublicClient({
-  chain: base, // Kita targetkan jaringan Base
-  transport: http(process.env.BASE_RPC_URL as string), // Menggunakan URL RPC dari .env.local atau Vercel Env
+const publicClient: PublicClient = createPublicClient({
+  chain: base,
+  transport: http(process.env.BASE_RPC_URL as string),
 });
 
 // --- Alamat Smart Contract & Token di Base ---
-// Anda HARUS MENGISI ALAMAT INI dengan yang benar untuk Base Mainnet!
-// UNISWAP_V3_ROUTER_ADDRESS adalah alamat SwapRouter di Base
-const UNISWAP_V3_ROUTER_ADDRESS: Address = '0x2626664c2602fd36Ea31bE86fE371395C01D2dF9'; // Contoh alamat Uniswap V3 SwapRouter di Base
-// Pastikan ini adalah alamat WETH yang benar di Base
+const UNISWAP_V3_ROUTER_ADDRESS: Address = '0x2626664c2602fd36Ea31bE86fE371395C01D2dF9'; // Uniswap V3 SwapRouter di Base
+const UNISWAP_V3_QUOTER_ADDRESS: Address = '0x3d0b2fB1802E08077c59124401831518f886B847'; // Uniswap V3 Quoter V2 di Base
+
 const WETH = new Token(base.id, '0x4200000000000000000000000000000000000006', 18, 'WETH', 'Wrapped Ether');
-// Pastikan ini adalah alamat USDC yang benar di Base
 const USDC = new Token(base.id, '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', 6, 'USDC', 'USD Coin');
+
+// Fees yang sering digunakan Uniswap V3
+const FEES = [FeeAmount.LOW, FeeAmount.MEDIUM, FeeAmount.HIGH]; // 0.05%, 0.3%, 1%
 
 // --- Inisialisasi Frog App ---
 export const app = new Frog({
@@ -40,7 +81,6 @@ export const app = new Frog({
   },
 });
 
-// Devtools hanya untuk development, tidak aktif di Vercel
 if (process.env.NODE_ENV === 'development') {
   devtools(app, { serveStatic });
 }
@@ -85,7 +125,7 @@ app.frame('/', (c) => {
 });
 
 // ===================================
-// FRAME KEDUA: Preview Swap
+// FRAME KEDUA: Preview Swap (Logika Manual)
 // ===================================
 app.frame('/preview', async (c) => {
   const { inputAmount, tokenInAddress, tokenOutAddress } = c.initialState;
@@ -106,65 +146,103 @@ app.frame('/preview', async (c) => {
 
   let estimatedOutput = '0';
   let gasEstimate = 'N/A';
-  let calldata = '0x';
+  let calldata: Hex = '0x'; // Type Hex dari Viem
   let toAddress = UNISWAP_V3_ROUTER_ADDRESS;
-  let value = '0';
+  let value: Hex = '0x0'; // Default value BigInt(0) ke Hex '0x0'
 
   try {
-    const amountInWei = parseUnits(inputAmount, WETH.decimals);
+    const amountInBigInt = parseUnits(inputAmount, WETH.decimals); // Konversi input string ke BigInt
+
     const tokenInObj = WETH;
     const tokenOutObj = USDC;
-
-    const router = new AlphaRouter({ chainId: base.id, provider: publicClient as any });
 
     const senderAddress = frameData?.address as Address;
     if (!senderAddress) {
       throw new Error("Could not get sender address from frame data.");
     }
 
-    const swapOptions: SwapOptions = {
-      recipient: senderAddress,
-      slippageTolerance: new Percent(50, 10_000), // 0.5% slippage
-      deadline: Math.floor(Date.now() / 1000) + 60 * 10, // 10 minutes from now
-      type: SwapType.SWAP_ROUTER_02,
+    // --- Logika Estimasi Swap Manual (Menggunakan Quoter V3) ---
+    // Kita akan mencari estimasi output dengan mencoba fee tiers yang berbeda
+    let bestOutput = BigInt(0);
+    let bestFee: FeeAmount | undefined;
+
+    for (const fee of FEES) {
+        try {
+            const quoteResult = await publicClient.readContract({
+                address: UNISWAP_V3_QUOTER_ADDRESS,
+                abi: V3_ROUTER_ABI, // Menggunakan ABI Quoter
+                functionName: 'quoteExactInputSingle',
+                args: [
+                    tokenInObj.address,
+                    tokenOutObj.address,
+                    fee,
+                    amountInBigInt,
+                    BigInt(0) // sqrtPriceLimitX96 (0 berarti tidak ada limit)
+                ],
+            });
+            if (quoteResult && (quoteResult as bigint) > bestOutput) {
+                bestOutput = quoteResult as bigint;
+                bestFee = fee;
+            }
+        } catch (quoteError) {
+            console.warn(`Could not get quote for fee ${fee}:`, quoteError);
+        }
+    }
+
+    if (bestOutput === BigInt(0) || !bestFee) {
+        throw new Error('No valid quote found for swap.');
+    }
+
+    estimatedOutput = formatEther(bestOutput.toString()); // Format output ke format manusiawi (untuk WETH/USDC, sesuaikan desimal)
+    // Jika tokenOutObj.decimals bukan 18 (misal USDC 6 desimal), gunakan parseUnits atau formatUnits dengan desimal yang sesuai
+    estimatedOutput = formatUnits(bestOutput, tokenOutObj.decimals);
+
+
+    // --- Buat Calldata untuk Transaksi Swap ---
+    // Ini adalah parameter untuk fungsi exactInputSingle di SwapRouter
+    const params = {
+      tokenIn: tokenInObj.address as Address,
+      tokenOut: tokenOutObj.address as Address,
+      fee: bestFee,
+      recipient: senderAddress, // Alamat penerima
+      deadline: BigInt(Math.floor(Date.now() / 1000) + 60 * 10), // Deadline 10 menit
+      amountIn: amountInBigInt,
+      amountOutMinimum: bestOutput * BigInt(9950) / BigInt(10000), // Minimum 0.5% slippage
+      sqrtPriceLimitX96: BigInt(0), // Tidak ada price limit
     };
 
-    const amountInCurrency = CurrencyAmount.fromRawAmount(tokenInObj, amountInWei.toString());
+    // Encode call data menggunakan Viem
+    calldata = await publicClient.encodeFunctionData({
+        abi: V3_ROUTER_ABI,
+        functionName: 'exactInputSingle',
+        args: [params as any], // Memastikan tipe args sesuai
+    });
 
-    const route = await router.route(
-      amountInCurrency,
-      tokenOutObj,
-      TradeType.EXACT_INPUT,
-      swapOptions
-    );
+    // Jika swap dari ETH (native token), value perlu diatur
+    if (tokenInObj.isNative) { // Misalnya WETH dianggap native jika kita mengirim ETH
+        value = amountInBigInt.toString() as Hex; // value adalah jumlah native token yang dikirim
+    }
 
-    if (route && route.route && route.methodParameters) {
-      estimatedOutput = formatEther(route.amountOut.quotient.toString());
-      calldata = route.methodParameters.calldata;
-      toAddress = route.methodParameters.to;
-      value = route.methodParameters.value;
 
-      c.initialState.estimatedOutput = estimatedOutput;
-      c.initialState.calldata = calldata;
-      c.initialState.toAddress = toAddress;
-      c.initialState.value = value;
-
-      try {
+    // --- Estimasi Gas ---
+    try {
         const gasLimit = await publicClient.estimateGas({
-          account: senderAddress,
-          to: toAddress,
-          data: calldata as Address,
-          value: BigInt(value),
+            account: senderAddress,
+            to: toAddress,
+            data: calldata,
+            value: BigInt(value),
         });
         gasEstimate = formatEther(gasLimit);
-      } catch (gasError) {
+    } catch (gasError) {
         console.warn("Could not estimate gas:", gasError);
-        gasEstimate = "N/A (check console)";
-      }
-
-    } else {
-      throw new Error('No swap route found for these tokens/amounts.');
+        gasEstimate = "N/A (could not estimate)";
     }
+
+    // Simpan data transaksi ke state Frame
+    c.initialState.estimatedOutput = estimatedOutput;
+    c.initialState.calldata = calldata;
+    c.initialState.toAddress = toAddress;
+    c.initialState.value = value; // Pastikan ini adalah Hex string
 
   } catch (error: any) {
     console.error('Error during swap estimation:', error);
@@ -221,8 +299,8 @@ app.transaction('/tx', (c) => {
   return c.send({
     chainId: `eip155:${base.id}`,
     to: toAddress as Address,
-    data: calldata as Address,
-    value: BigInt(value),
+    data: calldata as Hex, // Pastikan calldata bertipe Hex
+    value: BigInt(value as string), // Pastikan value diubah kembali ke BigInt jika disimpan sebagai string hex
   });
 });
 
